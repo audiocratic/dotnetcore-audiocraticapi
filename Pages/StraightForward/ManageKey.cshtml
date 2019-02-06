@@ -1,0 +1,40 @@
+@page
+@model AudiocraticAPI.Pages.StraightForward.ManageKeyModel
+
+<div class="container">
+    <form method="post">
+        <div class="row"
+            <div class="col-lg-4">
+                @if(Model.APIKey != null)
+                {
+                    <div class="spacer-md"><b>Your API key is: </b></div>
+                    
+                    @Model.APIKey.Key
+                }
+                else
+                {
+                    <p>It looks like you don't have an API Key. Click here to generate one.</p>
+                    <input type="submit" class="btn btn-primary" value="Get Key" />
+                }
+            </div>
+        </div>
+        @if(Model.APIKey != null)
+        {
+        <div class="row">
+            <div class="col-lg-4 spacer-md">
+                <label>Hub Spot API Key</label>
+                <input type="text" asp-for="APIKey.HubSpotKey" class="form-control">
+                <label>Constant Contact Public Key</label>
+                <input type="text" asp-for="APIKey.ConstantContactPublicKey" class="form-control">
+                <label>Constant Contact Private Key</label>
+                <input type="text" asp-for="APIKey.ConstantContactPrivateKey" class="form-control">
+            </div>
+        </div>
+        <div class="row spacer-md">
+            <input type="submit" asp-page-handler="UpdateExternalKeys" class="btn btn-primary" value="Save Changes" />
+        </div>
+        }
+        
+    </form>
+    
+</div>

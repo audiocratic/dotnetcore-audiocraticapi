@@ -1,0 +1,57 @@
+@page
+@model AudiocraticAPI.Pages.StraightForward.HubSpot.CreateModel
+
+@{
+    ViewData["Title"] = "Create";
+}
+
+<h2>Create</h2>
+
+<h4>ContactTypeToListRelationship</h4>
+<hr />
+<div class="row">
+    <div class="col-md-4">
+        <form method="post">
+            <div asp-validation-summary="ModelOnly" class="text-danger"></div>
+            <div class="form-group">
+                <label class="control-label">Contact Type</label>
+                <input 
+                    asp-for="ContactTypeToListRelationship.TypeName" 
+                    class="form-control" />
+                <span asp-validation-for="ContactTypeToListRelationship.TypeName" class="text-danger"></span>
+            </div>
+            <div class="form-group">
+                <label class="control-label">Contact List</label>
+                <select 
+                    class ="form-control"
+                    id="ContactLists"
+                    asp-for="ContactTypeToListRelationship.ListID" 
+                    asp-items="ViewBag.ContactLists"></select>
+            </div>
+            <div class="form-group">
+                <input type="submit" value="Create" class="btn btn-default" />
+            </div>
+            @Html.HiddenFor(m => m.ContactTypeToListRelationship.ListName)
+        </form>
+    </div>
+</div>
+
+<div>
+    <a asp-page="Index">Back to List</a>
+</div>
+
+@section Scripts {
+    @{await Html.RenderPartialAsync("_ValidationScriptsPartial");}
+
+
+    <script>
+        $(function(){
+            $("#ContactLists").chosen();
+            $("#ContactTypeToListRelationship_ListName").val($("#ContactLists option:selected").text());
+        });
+        
+        $("#ContactLists").change(function(elem){
+            $("#ContactTypeToListRelationship_ListName").val($("#ContactLists option:selected").text());
+        });
+    </script>
+}

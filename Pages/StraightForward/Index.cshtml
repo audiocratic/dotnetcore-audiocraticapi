@@ -1,0 +1,25 @@
+@page
+@model AudiocraticAPI.Pages.StraightForward.IndexModel
+@{
+    ViewData["Title"] = "Home page";
+}
+
+<div class="spacer-md"></div>
+<h2>StraightForward Admin</h2>
+<div class="spacer-md"></div>
+<h4>HubSpot -> Constant Contact Automation</h4>
+<ul>
+    <li>
+        <a asp-page="HubSpotToConstantContact/ContactsToLists/Index">
+            Decide which HubSpot Contact types should be added to which Constant Contact lists
+        </a>
+    </li>
+    <li>
+        <a asp-page="HubSpotToConstantContact/DealStageFilters/Index">
+            Decide which HubSpot deal stages should trigger adding contacts to e-mail lists
+        </a>
+    </li>
+    <li>
+        <a asp-page="ManageKey">Manage API Keys</a>
+    </li>
+</ul>

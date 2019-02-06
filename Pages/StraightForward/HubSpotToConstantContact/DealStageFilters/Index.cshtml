@@ -1,0 +1,37 @@
+@page
+@model AudiocraticAPI.Pages.StraightForward.HubSpotToConstantContact.DealStageFilters.IndexModel
+
+@{
+    ViewData["Title"] = "Index";
+}
+
+<h2>Manage Deal Stage Filters</h2>
+
+<p>
+    <a asp-page="Create" class="btn btn-success"><span class="glyphicon glyphicon-plus"></span>&nbspAdd</a>
+</p>
+<table class="table">
+    <thead>
+        <tr>
+            <th>
+                @Html.DisplayNameFor(model => model.DealStageFilter[0].StageName)
+            </th>
+            <th></th>
+        </tr>
+    </thead>
+    <tbody>
+@foreach (var item in Model.DealStageFilter) {
+        <tr>
+            <td>
+                @Html.DisplayFor(modelItem => item.StageName)
+            </td>
+            <td>
+                <a 
+                    asp-page="./Delete" 
+                    class="btn btn-danger" 
+                    asp-route-id="@item.ID">Delete</a>
+            </td>
+        </tr>
+}
+    </tbody>
+</table>

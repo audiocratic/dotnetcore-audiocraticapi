@@ -3,8 +3,11 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc.RazorPages;
+using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore;
 
-namespace dotnetcore_testapi.Pages
+namespace AudiocraticAPI.Pages
 {
     public class AboutModel : PageModel
     {
@@ -12,7 +15,6 @@ namespace dotnetcore_testapi.Pages
 
         public void OnGet()
         {
-            Message = "Your application description page.";
         }
     }
 }

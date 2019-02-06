@@ -11,7 +11,6 @@ namespace dotnetcore_testapi.Pages
     {
         public void OnGet()
         {
-
         }
     }
 }
