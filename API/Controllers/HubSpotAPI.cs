@@ -46,18 +46,18 @@ public class HubSpotController : ControllerBase
 
         IActionResult result = null;
 
-        try
-        {
-            result = 
-                _hubSpotToConstantContactService.TransferContactsFromHubSpotToConstantContact(
-                    GetDataFromRequest(),
-                    currentAPIKey
-                );
-        }
-        catch(Exception ex)
-        {
-            GetErrorJson(ex.Message);
-        }
+        // try
+        // {
+                result = 
+                await _hubSpotToConstantContactService.TransferContactsFromHubSpotToConstantContact(
+                        GetDataFromRequest(),
+                        currentAPIKey
+                    );
+        // }
+        // catch(Exception ex)
+        // {
+        //     GetErrorJson(ex.Message);
+        // }
 
         return result;
     }

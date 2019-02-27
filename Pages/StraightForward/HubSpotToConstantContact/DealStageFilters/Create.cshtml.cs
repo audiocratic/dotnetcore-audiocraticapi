@@ -20,13 +20,16 @@ namespace AudiocraticAPI.Pages.StraightForward.HubSpotToConstantContact.DealStag
     {
         private readonly AudiocraticAPI.APIContext _context;
         private readonly IHubSpotService _hubSpotService;
+        private readonly IAPIKeyService _apiKeyService;
 
         public CreateModel(
             AudiocraticAPI.APIContext context,
-            IHubSpotService hubSpotService)
+            IHubSpotService hubSpotService,
+            IAPIKeyService apiKeyService)
         {
             _context = context;
             _hubSpotService = hubSpotService;
+            _apiKeyService = apiKeyService;
         }
 
         public async Task<IActionResult> OnGetAsync()
@@ -40,7 +43,8 @@ namespace AudiocraticAPI.Pages.StraightForward.HubSpotToConstantContact.DealStag
             List<string> ids = filters.Select(f => f.StageID).ToList();
             
             //Fetch all deal stage options from hubspot
-            List<dynamic> dealStages = await _hubSpotService.GetDealStagesAsync();
+            APIKey key = await _apiKeyService.GetAPIKeyAsync();
+            List<dynamic> dealStages = await _hubSpotService.GetDealStagesAsync(key);
 
             List<dynamic> options = new List<dynamic>();
 

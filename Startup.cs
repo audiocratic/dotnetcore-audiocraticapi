@@ -11,6 +11,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.EntityFrameworkCore;
+using Newtonsoft.Json;
 using AudiocraticAPI.Models;
 using AudiocraticAPI.Services;
 
@@ -59,8 +60,16 @@ namespace AudiocraticAPI
             services.AddScoped<IAPIKeyService, APIKeyService>();
             services.AddScoped<IHubSpotService, HubSpotService>();
             services.AddScoped<IConstantContactService, ConstantContactService>();
+            services.AddScoped<IHubSpotToConstantContactService, HubSpotToConstantContactService>();
+            services.AddScoped<HubSpotToCCIntegrationLogService>();
+            services.AddScoped<IContactService, ContactService>();
+            services.AddScoped<IDealService, DealService>();
     
-            services.AddMvc().SetCompatibilityVersion(CompatibilityVersion.Version_2_1);
+            services.AddMvc()
+                .SetCompatibilityVersion(CompatibilityVersion.Version_2_1)
+                .AddJsonOptions(options => {
+                    options.SerializerSettings.ReferenceLoopHandling = ReferenceLoopHandling.Ignore;
+                });
         }
 
         // This method gets called by the runtime. Use this method to configure the HTTP request pipeline.

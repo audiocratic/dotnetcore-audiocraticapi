@@ -35,7 +35,7 @@ namespace AudiocraticAPI.Services
             if(!((ExpandoObject)data).HasProperty("dealId")) 
                 throw new Exception("Invalid HubSpot deal data.");
 
-            deal.ID = (int)data.dealId;
+            deal.HubSpotID = (int)data.dealId;
 
             if(((ExpandoObject)data).HasProperty("properties.dealname"))
                 deal.Name = data.properties.dealname.value;

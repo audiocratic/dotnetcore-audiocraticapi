@@ -16,26 +16,27 @@ namespace AudiocraticAPI.Services
     public interface IHubSpotService
     {
         
-        Task<dynamic> FetchDealByID(int ID, APIKey apiKey);
+        Task<dynamic> FetchDealDataByID(int ID, APIKey apiKey);
         Task<Contact> FetchContactByID(int ID, APIKey apiKey);
-        Task<List<dynamic>> GetDealStagesAsync();
+        Task<List<dynamic>> GetDealStagesAsync(APIKey apiKey);
+        Task<dynamic> FetchContactDataByID(int ID, APIKey apiKey);
     }
 
     public class HubSpotService : IHubSpotService
     {
         public EventHandler DealFetched { get; set; }
-        private readonly IAPIKeyService _apiKeyService;
         private readonly IDealService _dealService;
+        private readonly IContactService _contactService;
 
-        public HubSpotService(IAPIKeyService apiKeyService, IDealService dealService)
+        public HubSpotService(
+            IDealService dealService,
+            IContactService contactService)
         {
-            _apiKeyService = apiKeyService;
             _dealService = dealService;
+            _contactService = contactService;
         }
         
-        
-
-        public async Task<dynamic> FetchDealByID(int ID, APIKey apiKey)
+        public async Task<dynamic> FetchDealDataByID(int ID, APIKey apiKey)
         {
             string url = "https://api.hubapi.com/deals/v1/deal/" + ID.ToString() + "?hapikey=" + apiKey.HubSpotKey;
 
@@ -60,6 +61,21 @@ namespace AudiocraticAPI.Services
         {
             Contact contact = null;
 
+            dynamic responseContact = await FetchContactDataByID(ID, apiKey);
+
+            contact = _contactService.MapHubSpotDataToContact(responseContact);
+
+            if(contact != null)
+            {
+                contact.HubSpotID = ID;
+                contact.UserId = apiKey.UserId;
+            }
+                
+            return contact;
+        }
+
+        public async Task<dynamic> FetchContactDataByID(int ID, APIKey apiKey)
+        {
             string url = "https://api.hubapi.com/contacts/v1/contact/vid/" + ID.ToString() + "/profile?hapikey=" + apiKey.HubSpotKey;
 
             using(HttpClient client = new HttpClient())
@@ -72,49 +88,15 @@ namespace AudiocraticAPI.Services
 
                     dynamic responseContact = JsonConvert.DeserializeObject<ExpandoObject>(contactData);
 
-                    contact = MapHubSpotDataToContact(responseContact);
-
-                    if(contact != null)
-                    {
-                        contact.HubSpotID = ID;
-                        contact.UserId = apiKey.UserId;
-                    }
+                    return responseContact;
                 } 
             }
-
-            return contact;
         }
 
-        private Contact MapHubSpotDataToContact(dynamic data)
-        {
-            Contact contact = null;
-
-            if(((ExpandoObject)data.properties).HasProperty("contact_type")
-                && ((ExpandoObject)data.properties).HasProperty("email"))
-            {
-                contact = new Contact();
-                
-                contact.EmailAddresses = new List<ContactEmail>();
-                contact.EmailAddresses.Add(new ContactEmail(){
-                    Address = data.properties.email.value
-                });
-
-                contact.Type = data.properties.contact_type.value;
-                
-                if(((ExpandoObject)data.properties).HasProperty("firstname"))
-                    contact.FirstName = data.properties.firstname.value;
-
-                if(((ExpandoObject)data.properties).HasProperty("lastname"))
-                    contact.LastName = data.properties.lastname.value;
-            }
-
-            return contact;
-        }
-
-        public async Task<List<dynamic>> GetDealStagesAsync()
+        public async Task<List<dynamic>> GetDealStagesAsync(APIKey apiKey)
         {
             dynamic pipelines = 
-                JsonConvert.DeserializeObject<dynamic>(await GetPipelinesWithDealStagesJsonAsync());
+                JsonConvert.DeserializeObject<dynamic>(await GetPipelinesWithDealStagesJsonAsync(apiKey));
             
             List<dynamic> dealStages = new List<dynamic>();
 
@@ -132,11 +114,9 @@ namespace AudiocraticAPI.Services
             return dealStages;
         }
 
-        private async Task<string> GetPipelinesWithDealStagesJsonAsync()
+        private async Task<string> GetPipelinesWithDealStagesJsonAsync(APIKey apiKey)
         {
             string result = string.Empty;
-
-            APIKey apiKey = await _apiKeyService.GetAPIKeyAsync();
 
             string url = 
                 "https://api.hubapi.com/crm-pipelines/v1/pipelines/deals?hapikey=" + apiKey.HubSpotKey;

@@ -18,8 +18,9 @@ namespace AudiocraticAPI.Services
         
         Task<dynamic> FetchContactListsAsync();
         Task<dynamic> FetchContactDataByEmail(string address, APIKey apiKey);
+        Task<dynamic> FetchContactDataByID(string ID, APIKey apiKey);
         Task UpdateContact(dynamic contact, APIKey apiKey);
-        Task AddContact(dynamic contact, APIKey apiKey);
+        Task<dynamic> AddContact(dynamic contact, APIKey apiKey);
     }
 
     public class ConstantContactService : IConstantContactService
@@ -42,15 +43,29 @@ namespace AudiocraticAPI.Services
 
         public async Task<dynamic> FetchContactDataByEmail(string address, APIKey apiKey)
         {
+            string url = 
+                    "https://api.constantcontact.com/v2/contacts?api_key=" 
+                        + apiKey.ConstantContactPublicKey
+                        + "&email=" + System.Web.HttpUtility.UrlEncode(address);
+            
+            return await FetchContactData(url, apiKey);
+        }
+
+        public async Task<dynamic> FetchContactDataByID(string ID, APIKey apiKey)
+        {
+            string url = 
+                    "https://api.constantcontact.com/v2/contacts/" + ID +
+                    "?api_key=" + apiKey.ConstantContactPublicKey;
+            
+            return await FetchContactData(url, apiKey);
+        }
+
+        private async Task<dynamic> FetchContactData(string url, APIKey apiKey)
+        {
             dynamic contact = null;
 
             using(HttpClient client = new HttpClient())
             {
-                string url = 
-                    "https://api.constantcontact.com/v2/contacts?api_key=" 
-                        + apiKey.ConstantContactPublicKey
-                        + "&email=" + System.Web.HttpUtility.UrlEncode(address);
-                
                 using(HttpRequestMessage req = new HttpRequestMessage(HttpMethod.Get, url))
                 {
                     req.Headers.Add("Authorization", "Bearer " + apiKey.ConstantContactPrivateKey);
@@ -69,7 +84,7 @@ namespace AudiocraticAPI.Services
             return contact;
         }
 
-        public async Task AddContact(dynamic contact, APIKey apiKey)
+        public async Task<dynamic> AddContact(dynamic contact, APIKey apiKey)
         {
             using(HttpClient client = new HttpClient())
             {
@@ -92,6 +107,10 @@ namespace AudiocraticAPI.Services
 
                             throw new Exception("Unable to add contact.");
                         }
+
+                        return JsonConvert.DeserializeObject<ExpandoObject>(
+                            await response.Content.ReadAsStringAsync()
+                        );
                     }
                 }
             }

@@ -35,3 +35,7 @@ body {
         display: none;
     }
 }
+
+.spacer-md {
+    margin-top: 28px;
+}

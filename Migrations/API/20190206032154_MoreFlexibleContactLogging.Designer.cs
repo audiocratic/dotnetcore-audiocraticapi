@@ -3,14 +3,16 @@ using System;
 using AudiocraticAPI;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
-namespace AudiocraticAPI.Migrations
+namespace AudiocraticAPI.Migrations.API
 {
     [DbContext(typeof(APIContext))]
-    partial class APIContextModelSnapshot : ModelSnapshot
+    [Migration("20190206032154_MoreFlexibleContactLogging")]
+    partial class MoreFlexibleContactLogging
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -93,10 +95,12 @@ namespace AudiocraticAPI.Migrations
                     b.ToTable("ContactEmail");
                 });
 
-            modelBuilder.Entity("AudiocraticAPI.Models.ContactList", b =>
+            modelBuilder.Entity("AudiocraticAPI.Models.ContactListAddLog", b =>
                 {
                     b.Property<int>("ID")
                         .ValueGeneratedOnAdd();
+
+                    b.Property<DateTime>("AddedDateTime");
 
                     b.Property<int>("ContactID");
 
@@ -106,11 +110,16 @@ namespace AudiocraticAPI.Migrations
                     b.Property<string>("ListName")
                         .IsRequired();
 
+                    b.Property<string>("UserId")
+                        .IsRequired();
+
                     b.HasKey("ID");
 
                     b.HasIndex("ContactID");
 
-                    b.ToTable("ContactList");
+                    b.HasIndex("UserId");
+
+                    b.ToTable("ContactListAddLogs");
                 });
 
             modelBuilder.Entity("AudiocraticAPI.Models.ContactTypeToListRelationship", b =>
@@ -266,11 +275,16 @@ namespace AudiocraticAPI.Migrations
                         .OnDelete(DeleteBehavior.Cascade);
                 });
 
-            modelBuilder.Entity("AudiocraticAPI.Models.ContactList", b =>
+            modelBuilder.Entity("AudiocraticAPI.Models.ContactListAddLog", b =>
                 {
                     b.HasOne("AudiocraticAPI.Models.Contact", "Contact")
-                        .WithMany("ContactLists")
+                        .WithMany()
                         .HasForeignKey("ContactID")
+                        .OnDelete(DeleteBehavior.Cascade);
+
+                    b.HasOne("Microsoft.AspNetCore.Identity.IdentityUser", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId")
                         .OnDelete(DeleteBehavior.Cascade);
                 });
 

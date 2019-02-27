@@ -59,13 +59,14 @@ namespace AudiocraticAPI.Models
         public string LastName { get; set; }
         public string Type { get; set; }
         public List<ContactEmail> EmailAddresses { get; set; }
-        
-        [NotMapped]
         public List<ContactList> ContactLists { get; set; }
     }
 
     public class ContactList
     {
+        public int ID { get; set; }
+        public int ContactID { get; set; }
+        public Contact Contact { get; set; }
         public string ListID { get; set; }
         public string ListName { get; set; }
     }
@@ -78,17 +79,6 @@ namespace AudiocraticAPI.Models
         public string Address { get; set; }
     }
 
-    public class ContactListAddLog
-    {
-        public int ID { get; set; }
-        public string UserId { get; set; }
-        public IdentityUser User { get; set; }
-        public DateTime AddedDateTime { get; set; }
-        public int ContactID { get; set; }
-        public Contact Contact { get; set; }
-        public string ListID { get; set; }
-        public string ListName { get; set; }
-    }
 
     public class ContactTypeToListRelationship
     {

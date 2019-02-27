@@ -7,8 +7,10 @@ using System.Net.Http;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Newtonsoft.Json;
+using Newtonsoft.Json.Serialization;
 using AudiocraticAPI.Models;
 using AudiocraticAPI.Services;
 using CustomExtensions;
@@ -43,13 +45,8 @@ namespace AudiocraticAPI.Services
             _constantContactService = constantContactService;
             _contactService = contactService;
             _context = context;
-            _contactService.NewListAddedToContact += ConstantContactService_ContactListAdded;
             _logService = logService;
         }
-
-
-        //TODO:
-        // - Migrate database (added logging flexibility)
         
         //GENERAL FLOW:
         // 1) Receive deal change event from HubSpot
@@ -60,6 +57,7 @@ namespace AudiocraticAPI.Services
         //   b) Validate
         //       i) Should have at least one e-mail address
         //       ii) Should have a contact type (custom field in both HubSpot and Constant Contact)
+        //       iii) Contact type should have associated lists
         //   c) Compare current HubSpot data to most recent data in database to determine what kind
         //      of operation is needed
         //       i) If the same, do nothing
@@ -68,11 +66,12 @@ namespace AudiocraticAPI.Services
 
 
         public async Task<IActionResult> TransferContactsFromHubSpotToConstantContact(
-            string requestJSON, 
-            APIKey apiKey)
+            string requestJSON,
+            APIKey apiKey
+        )
         {
             //Verify deal is in proper stage
-            dynamic eventData = JsonConvert.DeserializeObject<ExpandoObject>(requestJSON);
+            dynamic eventData = JsonConvert.DeserializeObject<List<ExpandoObject>>(requestJSON);
 
             if(eventData[0] == null 
                 || !((ExpandoObject)eventData[0]).HasProperty("propertyName"))
@@ -84,87 +83,107 @@ namespace AudiocraticAPI.Services
             if(!await DealStageIsValid(eventData[0].propertyValue.ToString())) 
                 throw new Exception("Invalid dealstage. Ignoring deal.");
 
-            //Fetch contacts from deal
-            Deal deal = await FetchDealFromHubSpot((int)eventData[0].objectId, apiKey);
-
-            //Begin logging
-            _logService.DealStageChange = new DealStageChange();
-            _logService.DealStageChange.UserId = apiKey.UserId;
-            _logService.DealStageChange.ChangeDateTime = DateTime.Now;
-            _logService.DealStageChange.Deal = deal;
-
-            //TODO: Add filter for validating contacts here:
-            //  - Contact type
-            //  - At least one e-mail
-            foreach(Contact hubspotContact in deal.Contacts)
-            {
-                //Fetch lists to which this contact should be added
-                hubspotContact.ContactLists = new List<ContactList>();
-
-                string[] types = hubspotContact.Type.Split(";");
-
-                List<string> relationships = new List<string>();
-
-                foreach(string type in types)
-                {
-                    relationships.AddRange(await FetchContactListsByContactType(type));
-                }
-
-                foreach(string relationship in relationships)
-                {
-                    ContactList list = new ContactList();
-                    list.ListID = relationship;
-                    hubspotContact.ContactLists.Add(list);
-                }
-
-                dynamic constantContactContact = null;
-                
-                foreach(ContactEmail email in hubspotContact.EmailAddresses)
-                {
-                    if(constantContactContact == null)
-                    {
-                        //Attempt to fetch Constant Contact contact
-                        constantContactContact = 
-                            await _constantContactService.FetchContactDataByEmail(email.Address, apiKey);
-                    }
-                }
-                
-                if(constantContactContact == null) //If doesn't exist, create new
-                {
-                    constantContactContact =
-                        _contactService.MapContactToConstantContactData(hubspotContact);
-                    
-                    if(constantContactContact.lists.Count > 0)
-                    {
-                        Console.WriteLine("Adding contact to Constant Contact.");
-                    
-                        await _constantContactService.AddContact(constantContactContact, apiKey);
-                    }
-                }
-                else //If does exist, update
-                {
-                    _contactService.MapContactToConstantContactData(
-                        hubspotContact, constantContactContact);
-
-                    Console.WriteLine("Updating contact in Constant Contact.");
-
-                    await _constantContactService.UpdateContact(constantContactContact, apiKey);
-                }
-
-                Console.WriteLine(JsonConvert.SerializeObject(constantContactContact));
-            }
-            
-            await _logService.Save(apiKey);
-
-
-            return new JsonResult(_logService.DealStageChange);
+            return await TransferContactsFromHubSpotToConstantContact((int)eventData[0].objectId, apiKey);
         }
 
-        public async Task<Deal> FetchDealFromHubSpot(int dealID, APIKey apiKey)
+        public async Task<IActionResult> TransferContactsFromHubSpotToConstantContact(
+            int dealHubSpotId, 
+            APIKey apiKey)
+        {
+            //Fetch contacts from deal
+            Deal deal = await FetchDealWithContactsFromHubSpot(dealHubSpotId, apiKey);
+
+            foreach(Contact hubspotContact in deal.Contacts)
+            {
+                hubspotContact.LastModified = DateTime.Now;
+                
+                await FetchContactListsForContact(hubspotContact);
+
+                Dictionary<string, dynamic> customProps = new Dictionary<string, dynamic>();
+                customProps.Add("custom_field_1", deal.Name);
+
+                if(ContactCanBeTransferred(hubspotContact))
+                {
+                    //Has this contact been transferred before
+                    Contact loggedContact = 
+                        await _contactService.GetMostRecentContactVersion(hubspotContact, apiKey);
+                    
+                    if(loggedContact == null)
+                    {
+                        //Check if contact can be located in ConstantContact by e-mail address
+                        dynamic constantContactContact = 
+                            await GetContactDataByEmail(hubspotContact, apiKey);
+                        
+                        if(constantContactContact == null) //If doesn't exist, create new
+                        {
+                            constantContactContact =
+                                _contactService.MapContactToConstantContactData(hubspotContact, customProps);
+
+                            Console.WriteLine("Adding contact to Constant Contact.");
+                            
+                            constantContactContact = 
+                                await _constantContactService.AddContact(constantContactContact, apiKey);
+
+                            hubspotContact.ConstantContactID = constantContactContact.id;
+                        }
+                        else //If does exist, update
+                        {
+                            hubspotContact.ConstantContactID = constantContactContact.id;
+                            
+                            _contactService.MapContactToConstantContactData(
+                                hubspotContact, constantContactContact, customProps);
+
+                            Console.WriteLine("Updating contact in Constant Contact.");
+
+                            await _constantContactService.UpdateContact(constantContactContact, apiKey);
+                        }
+
+                        Console.WriteLine(JsonConvert.SerializeObject(constantContactContact));
+                    }
+                    else if(ContactHasChanged(hubspotContact, loggedContact))
+                    {
+                        dynamic constantContactContact = 
+                            await _constantContactService.FetchContactDataByID(hubspotContact.ConstantContactID, apiKey);
+                        
+                        _contactService.MapContactToConstantContactData(
+                            hubspotContact, constantContactContact, customProps);
+
+                        await _constantContactService.UpdateContact(constantContactContact, apiKey);
+                    }
+                    else
+                    {
+                        Console.WriteLine("Contact has not changed. Skipping.");
+                    }
+                }
+            }
+            
+            await _logService.Save(deal, apiKey);
+
+            return _logService.GetDealStageChangeJson();
+        }
+
+        public async Task<dynamic> GetContactDataByEmail(Contact contact, APIKey apiKey)
+        {
+            dynamic data = null;
+
+            foreach(ContactEmail email in contact.EmailAddresses)
+            {
+                if(data == null)
+                {
+                    //Attempt to fetch Constant Contact contact
+                    data = 
+                        await _constantContactService.FetchContactDataByEmail(email.Address, apiKey);
+                }
+            }
+
+            return data;
+        }
+
+        public async Task<Deal> FetchDealWithContactsFromHubSpot(int dealID, APIKey apiKey)
         {
             Deal deal = null;
 
-            dynamic responseDeal = await _hubSpotService.FetchDealByID(dealID, apiKey);
+            dynamic responseDeal = await _hubSpotService.FetchDealDataByID(dealID, apiKey);
 
             if(responseDeal == null) throw new Exception("Unable to retrieve HubSpot deal.");
 
@@ -198,40 +217,97 @@ namespace AudiocraticAPI.Services
             return (dealStageCount > 0);            
         }
 
-        public async Task<List<string>> FetchContactListsByContactType(string contactType)
+        public async Task FetchContactListsForContact(Contact contact)
+        {
+            //Fetch lists to which this contact should be added
+                contact.ContactLists = new List<ContactList>();
+
+                string[] types = contact.Type.Split(";");
+
+                List<ContactList> contactLists = new List<ContactList>();
+
+                foreach(string type in types)
+                {
+                    contactLists.AddRange(await FetchContactListsByContactType(type));
+                }
+
+                foreach(ContactList contactList in contactLists)
+                {
+                    ContactList list = new ContactList();
+                    list.ListID = contactList.ListID;
+                    list.ListName = contactList.ListName;
+                    contact.ContactLists.Add(list);
+                }
+        }
+
+        public async Task<List<ContactList>> FetchContactListsByContactType(string contactType)
         {
             List<ContactTypeToListRelationship> relationships = await _context.ContactTypeToListRelationship
                 .Where(c => c.TypeName == contactType)
                 .ToListAsync();
 
-            return relationships.Select(r => r.ListID).ToList();
+            return relationships
+                .Select(r => 
+                    {
+                        return new ContactList()
+                        {
+                            ListID = r.ListID,
+                            ListName = r.ListName
+                        };
+                    }).ToList();
         }
 
-        private bool ContactCanBeTransferred()
+        private bool ContactCanBeTransferred(Contact contact)
         {
-            return false;
+            bool transferable = true;
+
+            if(contact.EmailAddresses?.Count < 1) transferable = false;
+            if(contact.Type == null || contact.Type == string.Empty) transferable = false;
+            if(contact.ContactLists?.Count < 1) transferable = false;
+            
+            return transferable;
         }
 
-        private void ConstantContactService_ContactListAdded(
-            object sender, 
-            EventArgs e)
+        private bool ContactHasChanged(Contact hubspotContact, Contact dbContact)
         {
-            NewListAddedToContactEventArgs args = (NewListAddedToContactEventArgs)e;
+            bool changed = false;
 
-            ContactListAddLog log = new ContactListAddLog();
-            log.Contact = args.Contact;
-            log.ListID = args.ContactList.ListID;
-            log.ListName = args.ContactList.ListName;
+            //If the contact from HubSpot has more e-mail addresses, it has changed
+            if(hubspotContact.EmailAddresses.Count > dbContact.EmailAddresses.Count) changed = true;
+            
+            //Check if e-mail addresses line up
+            if(!changed)
+            {
+                foreach(ContactEmail address in hubspotContact.EmailAddresses)
+                {
+                    if(!changed)
+                    {
+                        if(dbContact.EmailAddresses.FirstOrDefault(a => a.Address == address.Address) == null)
+                            changed = true;
+                    }
+                }
+            }
 
-            _logService.ListsAdded = new List<ContactListAddLog>();
-            _logService.ListsAdded.Add(log);
+            //Check if lists line up
+            if(!changed)
+            {
+                foreach(ContactList list in hubspotContact.ContactLists)
+                {
+                    if(!changed)
+                    {
+                        if(dbContact.ContactLists.FirstOrDefault(l => l.ListID == list.ListID) == null)
+                            changed = true;
+                    }
+                }
+            }
+
+            return changed;
         }
     }
 
     public class HubSpotToCCIntegrationLogService
     {
-        public DealStageChange DealStageChange { get; set; }
-        public List<ContactListAddLog> ListsAdded { get; set; }
+        private DealStageChange DealStageChange { get; set; }
         private readonly APIContext _context;
 
         public HubSpotToCCIntegrationLogService(APIContext context)
@@ -239,23 +315,61 @@ namespace AudiocraticAPI.Services
             _context = context;
         }
 
-        public async Task Save(APIKey apiKey)
+        public async Task Save(Deal deal, APIKey apiKey)
         {
+            DealStageChange = new DealStageChange();
+            
             DealStageChange.UserId = apiKey.UserId;
+            DealStageChange.Deal = deal;
             DealStageChange.Deal.UserId = apiKey.UserId;
-
-            if(ListsAdded != null)
-            {
-                ListsAdded.ForEach(log => {
-                    log.UserId = apiKey.UserId;
-                });
-
-                _context.ContactListAddLogs.AddRange(ListsAdded);
-            }
+            DealStageChange.ChangeDateTime = DateTime.Now;
             
             _context.DealStageChanges.Add(DealStageChange);
 
             await _context.SaveChangesAsync();
+        }
+
+        //Return a JsonResult that has any user data stripped
+        public JsonResult GetDealStageChangeJson()
+        {
+            JsonSerializerSettings settings = new JsonSerializerSettings();
+
+            settings.ReferenceLoopHandling = ReferenceLoopHandling.Ignore;
+            settings.ContractResolver = new DealStageChangeContractResolver();
+            
+            return new JsonResult(DealStageChange, settings);
+        }
+
+        public async Task<List<DealStageChange>> GetDealStageChangesAsync(string userName)
+        {
+            return await _context.DealStageChanges
+                .Include(d => d.User)
+                .Include(d => d.Deal)
+                    .ThenInclude(d => d.Contacts)
+                        .ThenInclude(c => c.EmailAddresses)
+                .Include(d => d.Deal)
+                    .ThenInclude(d => d.Contacts)
+                        .ThenInclude(c => c.ContactLists)
+                .Where(d => d.User.UserName == userName)
+                .OrderByDescending(d => d.ChangeDateTime)
+                .ToListAsync();
+        }
+
+        protected class DealStageChangeContractResolver : DefaultContractResolver
+        {
+            protected override IList<JsonProperty> CreateProperties (
+                Type type, 
+                MemberSerialization memberSerialization)
+            {
+                IList<JsonProperty> properties = base.CreateProperties(type, memberSerialization);
+
+                properties =
+                    properties
+                        .Where(p => p.PropertyType.Name != "IdentityUser" && p.PropertyName != "UserId")
+                            .ToList();
+
+                return properties;
+            }
         }
     }
 }

@@ -20,7 +20,6 @@ namespace AudiocraticAPI
         public DbSet<APIKey> APIKey { get; set; }
         public DbSet<ContactTypeToListRelationship> ContactTypeToListRelationship { get; set; }
         public DbSet<DealStageFilter> DealStageFilters { get; set; }
-        public DbSet<ContactListAddLog> ContactListAddLogs { get; set; }
         
         public APIContext(DbContextOptions<APIContext> options) : base(options){}
 
@@ -72,14 +71,11 @@ namespace AudiocraticAPI
                 entity.Property(e => e.Address).IsRequired();
             });
 
-            modelBuilder.Entity<ContactListAddLog>(entity => 
+            modelBuilder.Entity<ContactList>(entity =>
             {
                 entity.HasKey(e => e.ID);
-                entity.HasOne(e => e.User);
-                entity.Property(e => e.UserId).IsRequired();
-                entity.Property(e => e.AddedDateTime).IsRequired();
-                entity.Property(e => e.ContactID).IsRequired();
                 entity.HasOne(e => e.Contact);
+                entity.Property(e => e.ContactID).IsRequired();
                 entity.Property(e => e.ListID).IsRequired();
                 entity.Property(e => e.ListName).IsRequired();
             });
@@ -104,7 +100,6 @@ namespace AudiocraticAPI
                 entity.HasIndex(e => e.UserId).IsUnique();
             });
 
-            modelBuilder.Ignore<ContactList>();
         }
     }
 }
