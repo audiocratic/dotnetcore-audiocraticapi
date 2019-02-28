@@ -20,6 +20,7 @@ namespace AudiocraticAPI.Services
     public interface IHubSpotToConstantContactService
     {
         Task<IActionResult> TransferContactsFromHubSpotToConstantContact(string requestJSON, APIKey apiKey);
+        Task<IActionResult> TransferContactsFromHubSpotToConstantContact(int dealHubSpotId, APIKey apiKey);
     }
 
     public class HubSpotToConstantContactService : IHubSpotToConstantContactService
@@ -340,19 +341,35 @@ namespace AudiocraticAPI.Services
             return new JsonResult(DealStageChange, settings);
         }
 
-        public async Task<List<DealStageChange>> GetDealStageChangesAsync(string userName)
+        public async Task<int> GetTotalDealStageChanges(string userName)
         {
             return await _context.DealStageChanges
+                .Include(d => d.User)
+                .Where(d => d.User.UserName == userName)
+                .CountAsync();
+        }
+
+        public async Task<List<DealStageChange>> GetDealStageChangesAsync(
+            string userName,
+            int? skip,
+            int? take)
+        {
+            IQueryable<DealStageChange> query = _context.DealStageChanges
                 .Include(d => d.User)
                 .Include(d => d.Deal)
                     .ThenInclude(d => d.Contacts)
                         .ThenInclude(c => c.EmailAddresses)
                 .Include(d => d.Deal)
                     .ThenInclude(d => d.Contacts)
-                        .ThenInclude(c => c.ContactLists)
-                .Where(d => d.User.UserName == userName)
-                .OrderByDescending(d => d.ChangeDateTime)
-                .ToListAsync();
+                        .ThenInclude(c => c.ContactLists);
+            
+            if(skip != null) query = query.Skip((int)skip);
+            if(take != null) query = query.Take((int)take);
+            
+            query = query.Where(d => d.User.UserName == userName)
+            .OrderByDescending(d => d.ChangeDateTime);
+
+            return await query.ToListAsync();
         }
 
         protected class DealStageChangeContractResolver : DefaultContractResolver
